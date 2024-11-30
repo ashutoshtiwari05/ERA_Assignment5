@@ -87,14 +87,3 @@ jobs:
           echo "Some tests failed. Check the test report for details."
           exit 1
         fi
-
-    - name: Update badge
-      if: success()
-      uses: schneegans/dynamic-badges-action@v1.6.0
-      with:
-        auth: ${{ secrets.GIST_SECRET }}
-        gistID: YOUR_GIST_ID
-        filename: mnist-tests.json
-        label: tests
-        message: passing
-        color: green
