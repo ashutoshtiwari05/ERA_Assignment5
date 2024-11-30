@@ -19,5 +19,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install torch torchvision
     
+    - name: Cache MNIST data
+      uses: actions/cache@v2
+      with:
+        path: data
+        key: mnist-data
+    
     - name: Run tests
-      run: python test_model.py 
+      run: python test_model.py
+    
+    - name: Upload model artifact
+      if: success()
+      uses: actions/upload-artifact@v2
+      with:
+        name: mnist-model
+        path: mnist_model.pth
+    
+    - name: Report results
+      run: |
+        echo "Model test results:"
+        echo "- Parameters: $(python -c 'from mnist_model import LightMNIST, count_parameters; print(count_parameters(LightMNIST()))')"
+        echo "- Accuracy: See test output above"
