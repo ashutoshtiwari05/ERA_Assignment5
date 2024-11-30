@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: '3.8'
     
@@ -20,7 +20,7 @@ jobs:
         pip install torch torchvision
     
     - name: Cache MNIST data
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: data
         key: mnist-data
@@ -30,10 +30,11 @@ jobs:
     
     - name: Upload model artifact
       if: success()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: mnist-model
         path: mnist_model.pth
+        retention-days: 90
     
     - name: Report results
       run: |
