@@ -64,83 +64,83 @@ def train_model():
         transforms.Normalize((0.1307,), (0.3081,))
     ])
     
-    # Use context manager for datasets to ensure proper cleanup
-    with datasets.MNIST('./data', train=True, download=True, transform=transform_train) as train_dataset, \
-         datasets.MNIST('./data', train=False, transform=transform_test) as test_dataset:
+    # Remove context manager
+    train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform_train)
+    test_dataset = datasets.MNIST('./data', train=False, transform=transform_test)
+    
+    train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=1000, pin_memory=True)
+    
+    model = LightMNIST().to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.003, weight_decay=0.01)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=1e-4)
+    
+    param_count = count_parameters(model)
+    print(f"Total trainable parameters: {param_count}")
+    
+    # Training loop with memory management
+    model.train()
+    warmup_steps = 200
+    for batch_idx, (data, target) in enumerate(train_loader):
+        # Move data to device and clear previous gradients
+        data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
+        optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
         
-        train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, pin_memory=True)
-        test_loader = DataLoader(test_dataset, batch_size=1000, pin_memory=True)
+        # Forward pass
+        output = model(data)
+        loss = F.nll_loss(output, target)
         
-        model = LightMNIST().to(device)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=0.003, weight_decay=0.01)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=1e-4)
+        # Backward pass
+        loss.backward()
         
-        param_count = count_parameters(model)
-        print(f"Total trainable parameters: {param_count}")
+        # Learning rate warmup
+        if batch_idx < warmup_steps:
+            lr_scale = min(1., float(batch_idx + 1) / warmup_steps)
+            for pg in optimizer.param_groups:
+                pg['lr'] = lr_scale * 0.003
         
-        # Training loop with memory management
-        model.train()
-        warmup_steps = 200
-        for batch_idx, (data, target) in enumerate(train_loader):
-            # Move data to device and clear previous gradients
+        # Update weights
+        optimizer.step()
+        scheduler.step()
+        
+        # Print progress and clear memory
+        if batch_idx % 100 == 0:
+            print(f'Train Batch: {batch_idx}/{len(train_loader)} Loss: {loss.item():.4f}')
+            
+        # Clear unnecessary tensors
+        del data, target, output, loss
+        if batch_idx % 10 == 0:  # Periodic garbage collection
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+    
+    # Testing loop
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data, target in test_loader:
             data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
-            optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
-            
-            # Forward pass
             output = model(data)
-            loss = F.nll_loss(output, target)
+            pred = output.argmax(dim=1)
+            correct += pred.eq(target).sum().item()
+            total += target.size(0)
             
-            # Backward pass
-            loss.backward()
-            
-            # Learning rate warmup
-            if batch_idx < warmup_steps:
-                lr_scale = min(1., float(batch_idx + 1) / warmup_steps)
-                for pg in optimizer.param_groups:
-                    pg['lr'] = lr_scale * 0.003
-            
-            # Update weights
-            optimizer.step()
-            scheduler.step()
-            
-            # Print progress and clear memory
-            if batch_idx % 100 == 0:
-                print(f'Train Batch: {batch_idx}/{len(train_loader)} Loss: {loss.item():.4f}')
-                
-            # Clear unnecessary tensors
-            del data, target, output, loss
-            if batch_idx % 10 == 0:  # Periodic garbage collection
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-        
-        # Testing loop
-        model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for data, target in test_loader:
-                data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
-                output = model(data)
-                pred = output.argmax(dim=1)
-                correct += pred.eq(target).sum().item()
-                total += target.size(0)
-                
-                # Clear memory
-                del data, target, output, pred
-        
-        accuracy = 100. * correct / total
-        print(f'Test Accuracy: {accuracy:.2f}%')
-        
-        # Save model
-        torch.save(model.state_dict(), 'mnist_model.pth')
-        
-        # Final cleanup
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
-        return accuracy, param_count
+            # Clear memory
+            del data, target, output, pred
+    
+    accuracy = 100. * correct / total
+    print(f'Test Accuracy: {accuracy:.2f}%')
+    
+    # Save model
+    torch.save(model.state_dict(), 'mnist_model.pth')
+    
+    # Final cleanup
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    return accuracy, param_count
 
 if __name__ == "__main__":
     train_model() 

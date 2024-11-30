@@ -17,13 +17,14 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install torch torchvision matplotlib pytest numpy psutil
+        pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cpu
+        pip install matplotlib pytest numpy psutil pytest-html pytest-cov
     
     - name: Cache MNIST data
       uses: actions/cache@v4
       with:
         path: data
-        key: mnist-data
+        key: mnist-data-${{ hashFiles('mnist_model.py') }}
     
     - name: Generate augmentation samples
       run: |
@@ -31,23 +32,69 @@ jobs:
         python utils/visualize_augmentation.py
         ls -la data/augmented_samples/
     
-    - name: Run tests
+    - name: Train model
       run: |
-        python -m pytest test_model.py -v
+        python mnist_model.py
+        echo "Model training completed"
     
-    - name: Upload artifacts
-      if: success()
+    - name: Run tests with coverage
+      run: |
+        pytest test_model.py -v --html=test-report.html --cov=. --cov-report=html
+    
+    - name: Upload test artifacts
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: results
+        name: test-results
         path: |
           mnist_model.pth
           data/augmented_samples/*.png
+          test-report.html
+          htmlcov/
         retention-days: 90
     
-    - name: Report results
+    - name: Report model metrics
       run: |
-        echo "Model test results:"
-        echo "- Parameters: $(python -c 'from mnist_model import LightMNIST, count_parameters; print(count_parameters(LightMNIST()))')"
-        echo "- Accuracy: See test output above"
-        echo "- Generated images: $(ls data/augmented_samples/*.png | wc -l) files"
+        echo "Model Performance Summary:"
+        echo "========================="
+        echo "Parameters: $(python -c 'from mnist_model import LightMNIST, count_parameters; print(count_parameters(LightMNIST()))')"
+        echo "------------------------"
+        echo "Test Results:"
+        python -c "
+        from mnist_model import LightMNIST
+        import torch
+        model = LightMNIST()
+        try:
+            model.load_state_dict(torch.load('mnist_model.pth'))
+            print('✓ Model loaded successfully')
+        except:
+            print('✗ Model loading failed')
+        "
+        echo "------------------------"
+        echo "Memory Usage:"
+        python -c "
+        import psutil
+        process = psutil.Process()
+        print(f'Memory: {process.memory_info().rss / 1024 / 1024:.1f} MB')
+        "
+    
+    - name: Check test status
+      if: always()
+      run: |
+        if [ ${{ job.status }} == 'success' ]; then
+          echo "All tests passed successfully!"
+        else
+          echo "Some tests failed. Check the test report for details."
+          exit 1
+        fi
+
+    - name: Update badge
+      if: success()
+      uses: schneegans/dynamic-badges-action@v1.6.0
+      with:
+        auth: ${{ secrets.GIST_SECRET }}
+        gistID: YOUR_GIST_ID
+        filename: mnist-tests.json
+        label: tests
+        message: passing
+        color: green
