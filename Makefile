@@ -1,4 +1,4 @@
-.PHONY: env clean train test all init
+.PHONY: env clean train test all init env_update
 
 # Environment variables
 CONDA_ENV_NAME := mnist_light
@@ -34,6 +34,14 @@ env:
 	conda activate $(CONDA_ENV_NAME)
 	@echo "Conda environment '$(CONDA_ENV_NAME)' is ready."
 
+# Update conda environment
+env_update:
+	@echo "Updating conda environment..."
+	source $(CONDA_ROOT)/etc/profile.d/conda.sh && \
+	"$(CONDA)" env update -f environment.yaml --prune && \
+	conda activate $(CONDA_ENV_NAME)
+	@echo "Conda environment '$(CONDA_ENV_NAME)' has been updated."
+
 # Clean generated files
 clean:
 	@echo "Cleaning generated files..."
@@ -62,15 +70,19 @@ all: clean env train test
 # Help command
 help:
 	@echo "Available commands:"
-	@echo "  make init  - Initialize conda in your shell (run this first)"
-	@echo "  make env   - Create/update conda environment"
-	@echo "  make clean - Clean generated files"
-	@echo "  make train - Train the model"
-	@echo "  make test  - Run tests"
-	@echo "  make all   - Run complete workflow (clean, env, train, test)"
+	@echo "  make init       - Initialize conda in your shell (run this first)"
+	@echo "  make env        - Create/update conda environment (full rebuild)"
+	@echo "  make env_update - Update existing environment (faster than full rebuild)"
+	@echo "  make clean      - Clean generated files"
+	@echo "  make train      - Train the model"
+	@echo "  make test       - Run tests"
+	@echo "  make all        - Run complete workflow (clean, env, train, test)"
 	@echo ""
 	@echo "First time setup:"
 	@echo "  1. Install Miniconda from: https://docs.conda.io/en/latest/miniconda.html"
 	@echo "  2. Run 'make init'"
 	@echo "  3. Run 'source ~/.bashrc'"
-	@echo "  4. Run 'make env'" 
+	@echo "  4. Run 'make env'"
+	@echo ""
+	@echo "For updating existing environment:"
+	@echo "  Run 'make env_update'"

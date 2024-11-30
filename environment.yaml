@@ -10,4 +10,6 @@ dependencies:
   - pip
   - pyyaml
   - pytest
-  - make 
+  - make
+  - matplotlib
+  - psutil

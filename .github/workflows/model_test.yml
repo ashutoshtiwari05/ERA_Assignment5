@@ -17,7 +17,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install torch torchvision
+        pip install torch torchvision matplotlib pytest numpy
     
     - name: Cache MNIST data
       uses: actions/cache@v4
@@ -25,15 +25,24 @@ jobs:
         path: data
         key: mnist-data
     
-    - name: Run tests
-      run: python test_model.py
+    - name: Generate augmentation samples
+      run: |
+        mkdir -p data/augmented_samples
+        python utils/visualize_augmentation.py
+        ls -la data/augmented_samples/
     
-    - name: Upload model artifact
+    - name: Run tests
+      run: |
+        pytest test_model.py -v
+    
+    - name: Upload artifacts
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: mnist-model
-        path: mnist_model.pth
+        name: results
+        path: |
+          mnist_model.pth
+          data/augmented_samples/*.png
         retention-days: 90
     
     - name: Report results
@@ -41,3 +50,4 @@ jobs:
         echo "Model test results:"
         echo "- Parameters: $(python -c 'from mnist_model import LightMNIST, count_parameters; print(count_parameters(LightMNIST()))')"
         echo "- Accuracy: See test output above"
+        echo "- Generated images: $(ls data/augmented_samples/*.png | wc -l) files"
